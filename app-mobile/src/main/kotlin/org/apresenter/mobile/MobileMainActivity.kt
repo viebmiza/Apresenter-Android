@@ -25,9 +25,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -181,7 +181,7 @@ private fun MobileRootScreen(
                 NavigationBarItem(
                     selected = activeTab == MobileTab.BIBLE,
                     onClick = { activeTab = MobileTab.BIBLE },
-                    icon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
+                    icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
                     label = { Text(MobileTab.BIBLE.label) },
                 )
                 NavigationBarItem(
@@ -323,8 +323,8 @@ private fun LiveStatusCard(live: LiveStateDto?) {
                 live == null -> "Nenhuma projecao ativa no momento."
                 !live.songTitle.isNullOrBlank() -> "${live.songTitle}${live.sectionLabel?.let { " · $it" }.orEmpty()}"
                 !live.bookName.isNullOrBlank() -> "${live.bookName} ${live.chapter}:${live.verseRange ?: live.verseNumber}"
-                !live.announcementText.isNullOrBlank() -> live.announcementText
-                !live.questionText.isNullOrBlank() -> live.questionText
+                !live.announcementText.isNullOrBlank() -> live.announcementText.orEmpty()
+                !live.questionText.isNullOrBlank() -> live.questionText.orEmpty()
                 else -> live.contentType
             }
             Text(headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
