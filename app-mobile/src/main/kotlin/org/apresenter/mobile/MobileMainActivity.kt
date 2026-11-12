@@ -604,6 +604,12 @@ private fun ConnectionTab(
             ) {
                 Text("Conectar")
             }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Dica: No computador, abra Opções → Servidor para conferir o IP da rede Wi-Fi local (ex: 192.168.x.x).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         if (ui.host.isNotBlank()) {

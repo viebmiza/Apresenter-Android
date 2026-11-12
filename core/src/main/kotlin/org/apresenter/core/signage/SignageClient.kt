@@ -164,14 +164,6 @@ class SignageClient(
             while (isActive) {
                 val connected = openSingleSession(cleanHost, port)
                 backoffMs = if (connected) 2_000L else (backoffMs * 2).coerceAtMost(30_000L)
-                publishState(
-                    phase = if (token != null && currentManifest != null) {
-                        ConnectionPhase.OFFLINE_CACHED
-                    } else {
-                        ConnectionPhase.SEARCHING
-                    },
-                    note = "Reconectando a $cleanHost:$port...",
-                )
                 delay(backoffMs)
             }
         }
@@ -201,6 +193,10 @@ class SignageClient(
     }
 
     private suspend fun openSingleSession(host: String, port: Int): Boolean {
+        publishState(
+            phase = if (token != null && currentManifest != null) ConnectionPhase.OFFLINE_CACHED else ConnectionPhase.SEARCHING,
+            note = "Conectando a $host:$port...",
+        )
         val wsUrl = "ws://$host:$port/api/signage/ws"
         val reqBuilder = Request.Builder().url(wsUrl)
         val currentToken = token
@@ -261,9 +257,10 @@ class SignageClient(
                         pairingCode = generatePairingCode()
                         prefs.edit().remove("token").apply()
                     }
+                    val detail = t.message ?: response?.code?.toString() ?: "sem resposta"
                     publishState(
                         phase = if (currentManifest != null) ConnectionPhase.OFFLINE_CACHED else ConnectionPhase.ERROR,
-                        note = "Erro de conexao: ${t.message ?: response?.code ?: "desconhecido"}",
+                        note = "Não foi possível conectar a $host:$port ($detail). Verifique o IP do PC e a rede Wi-Fi.",
                     )
                     sessionClosed.complete(wasOpened)
                 }

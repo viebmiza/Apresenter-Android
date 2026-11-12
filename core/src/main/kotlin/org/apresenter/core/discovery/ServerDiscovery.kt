@@ -29,6 +29,8 @@ class ServerDiscovery(context: Context) {
 
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private var multicastLock: WifiManager.MulticastLock? = null
+    private val pendingResolves = java.util.concurrent.ConcurrentLinkedQueue<NsdServiceInfo>()
+    private val isResolving = java.util.concurrent.atomic.AtomicBoolean(false)
 
     fun start() {
         val manager = nsdManager ?: return
@@ -74,6 +76,8 @@ class ServerDiscovery(context: Context) {
     fun stop() {
         val listener = discoveryListener ?: return
         discoveryListener = null
+        pendingResolves.clear()
+        isResolving.set(false)
         runCatching { nsdManager?.stopServiceDiscovery(listener) }
         runCatching {
             if (multicastLock?.isHeld == true) multicastLock?.release()
@@ -81,29 +85,52 @@ class ServerDiscovery(context: Context) {
         multicastLock = null
     }
 
-    @Suppress("DEPRECATION")
     private fun resolve(manager: NsdManager, serviceInfo: NsdServiceInfo) {
+        pendingResolves.add(serviceInfo)
+        processNextResolve(manager)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun processNextResolve(manager: NsdManager) {
+        if (!isResolving.compareAndSet(false, true)) return
+        val next = pendingResolves.poll()
+        if (next == null) {
+            isResolving.set(false)
+            return
+        }
+
         runCatching {
             manager.resolveService(
-                serviceInfo,
+                next,
                 object : NsdManager.ResolveListener {
-                    override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) = Unit
+                    override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                        isResolving.set(false)
+                        processNextResolve(manager)
+                    }
 
                     override fun onServiceResolved(resolved: NsdServiceInfo) {
-                        val host = resolved.host?.hostAddress?.takeIf { it.isNotBlank() } ?: return
-                        val port = resolved.port.takeIf { it > 0 } ?: BrandConfig.DEFAULT_PORT
-                        val entry = DiscoveredServer(
-                            name = resolved.serviceName.ifBlank { host },
-                            host = host,
-                            port = port,
-                        )
-                        _servers.update { current ->
-                            (current.filterNot { it.name == entry.name && it.host == entry.host } + entry)
-                                .sortedBy { it.name.lowercase() }
+                        try {
+                            val host = resolved.host?.hostAddress?.takeIf { it.isNotBlank() } ?: return
+                            val port = resolved.port.takeIf { it > 0 } ?: BrandConfig.DEFAULT_PORT
+                            val entry = DiscoveredServer(
+                                name = resolved.serviceName.ifBlank { host },
+                                host = host,
+                                port = port,
+                            )
+                            _servers.update { current ->
+                                (current.filterNot { it.name == entry.name && it.host == entry.host } + entry)
+                                    .sortedBy { it.name.lowercase() }
+                            }
+                        } finally {
+                            isResolving.set(false)
+                            processNextResolve(manager)
                         }
                     }
                 },
             )
+        }.onFailure {
+            isResolving.set(false)
+            processNextResolve(manager)
         }
     }
 }

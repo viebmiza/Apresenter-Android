@@ -242,7 +242,22 @@ private fun TvPairingScreen(
             }
 
             if (signage.statusNote.isNotBlank()) {
-                Text(signage.statusNote, fontSize = 15.sp, color = Color(0xFFFBBF24))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (signage.phase == ConnectionPhase.ERROR) Color(0x33EF4444) else Color(0x333B82F6),
+                    modifier = Modifier.fillMaxWidth().border(
+                        1.dp,
+                        if (signage.phase == ConnectionPhase.ERROR) Color(0xFFEF4444) else Color(0xFF3B82F6),
+                        RoundedCornerShape(10.dp),
+                    ),
+                ) {
+                    Text(
+                        text = signage.statusNote,
+                        fontSize = 15.sp,
+                        color = Color.White,
+                        modifier = Modifier.padding(14.dp),
+                    )
+                }
             }
         }
 
@@ -257,12 +272,12 @@ private fun TvPairingScreen(
                 discovered.forEach { server ->
                     Button(
                         onClick = { onConnect(server.host, server.port) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
                     ) {
                         Icon(Icons.Default.Wifi, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("${server.name} (${server.host}:${server.port})")
+                        Text("${server.name} (${server.host}:${server.port})", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -285,12 +300,18 @@ private fun TvPairingScreen(
                     modifier = Modifier.weight(1f),
                 )
             }
-            OutlinedButton(
+            Button(
                 onClick = { onConnect(manualHost, manualPort.toIntOrNull() ?: 8765) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
             ) {
-                Text("Conectar e parear")
+                Text("Conectar e parear", fontWeight = FontWeight.Bold)
             }
+            Text(
+                "Dica: No PC, abra Opções → Servidor para confirmar o IP da rede Wi-Fi local (ex: 192.168.x.x).",
+                fontSize = 13.sp,
+                color = Color(0xFF94A3B8),
+            )
         }
     }
 }

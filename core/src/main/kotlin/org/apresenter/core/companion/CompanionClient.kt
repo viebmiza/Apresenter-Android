@@ -103,10 +103,6 @@ class CompanionClient(context: Context) {
         connectJob = scope.launch {
             while (isActive) {
                 runSocketSession(savedHost, savedPort, savedApiKey)
-                _state.value = _state.value.copy(
-                    connected = false,
-                    statusText = "Desconectado de $savedHost:$savedPort. Tentando reconectar...",
-                )
                 delay(3_000L)
             }
         }
@@ -147,14 +143,19 @@ class CompanionClient(context: Context) {
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    val detail = t.message ?: response?.code?.toString() ?: "sem resposta"
                     _state.value = _state.value.copy(
                         connected = false,
-                        statusText = "Erro: ${t.message ?: response?.code ?: "desconhecido"}",
+                        statusText = "Falha ao conectar em $host:$port ($detail). Verifique o IP em Opções → Servidor no PC.",
                     )
                     done.complete(Unit)
                 }
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                    _state.value = _state.value.copy(
+                        connected = false,
+                        statusText = "Desconectado de $host:$port. Tentando reconectar...",
+                    )
                     done.complete(Unit)
                 }
             },
