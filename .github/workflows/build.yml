@@ -1,0 +1,121 @@
+name: Build Android APKs
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Publicar GitHub Release com os 2 APKs'
+        type: boolean
+        default: false
+      tag_name:
+        description: 'Nome da tag de release (quando disparado manualmente)'
+        type: string
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Mobile & TV APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Ensure gradlew is executable
+        run: chmod +x gradlew
+
+      - name: Run core unit tests
+        run: ./gradlew :core:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build Debug APKs
+        run: ./gradlew :app-mobile:assembleDebug :app-tv:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload Debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: apresenter-android-debug-apks
+          path: |
+            app-mobile/build/outputs/apk/debug/*.apk
+            app-tv/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+      - name: Prepare Release Keystore (if configured)
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "${{ runner.temp }}/release.keystore"
+            echo "ANDROID_KEYSTORE_PATH=${{ runner.temp }}/release.keystore" >> "$GITHUB_ENV"
+          else
+            echo "ANDROID_KEYSTORE_BASE64 nao configurada; usando assinatura debug para testes."
+          fi
+
+      - name: Build Release APKs
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app-mobile:assembleRelease :app-tv:assembleRelease --no-daemon --stacktrace
+
+      - name: Package Release APKs
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag_name }}"
+          fi
+          mkdir -p release-assets
+          MOBILE_APK=$(find app-mobile/build/outputs/apk/release -name "*.apk" | head -n 1)
+          TV_APK=$(find app-tv/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$MOBILE_APK" ] || [ -z "$TV_APK" ]; then
+            echo "Erro: APK de release nao encontrado!"
+            exit 1
+          fi
+          cp "$MOBILE_APK" "release-assets/Apresenter-Celular-${TAG}.apk"
+          cp "$TV_APK" "release-assets/Apresenter-TV-${TAG}.apk"
+          ls -lh release-assets/
+
+      - name: Upload Release Artifacts
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+        uses: actions/upload-artifact@v4
+        with:
+          name: apresenter-android-release-apks
+          path: release-assets/*.apk
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+          name: Apresenter Android ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+          body: |
+            Instalação direta para Android e Android TV / Google TV:
+            - **Apresenter-Celular-*.apk**: Controle remoto, Roteiro, Bíblia, Músicas, Palco e P&R para celulares e tablets.
+            - **Apresenter-TV-*.apk**: Receptor exclusivo para Smart TVs Android/Google TV e TV Box (Sinalização / avisos / cache offline).
+          files: |
+            release-assets/Apresenter-Celular-*.apk
+            release-assets/Apresenter-TV-*.apk
